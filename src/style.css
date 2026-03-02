@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+body {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  min-height: 100vh;
+}
+
+.stats-card {
+  @apply bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 min-w-[80px];
+}
+
+.btn {
+  @apply bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium;
+}
+
+.btn:hover {
+  @apply transform scale-105;
+}
+
+.cell {
+  @apply bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-2xl md:text-3xl cursor-pointer transition-all duration-200 select-none;
+  aspect-ratio: 1;
+}
+
+.cell:hover {
+  @apply transform scale-105;
+}
+
+.cell.selected {
+  @apply bg-blue-500/50 ring-2 ring-blue-400;
+}
+
+.cell.matched {
+  @apply opacity-0 pointer-events-none;
+}
+
+.cell.hint {
+  @apply ring-2 ring-yellow-400 animate-pulse;
+}
+
+.match-line {
+  position: absolute;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 4px;
+  z-index: 10;
+  animation: lineFlash 0.3s ease-out;
+}
+
+@keyframes lineFlash {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+
+.win-modal {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+.win-content {
+  @apply bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md mx-4;
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.cell.popping {
+  animation: pop 0.3s ease-out forwards;
+}
