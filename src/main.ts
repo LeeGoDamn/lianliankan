@@ -49,49 +49,34 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr
 }
 
-// ==================== 核心算法：逆向生成法 ====================
-// 从空棋盘开始，每次放置一对图案，保证每对都可连接
-// 这样生成的棋盘一定能被完全消除！
+// 逆向生成法：保证初始有解
 function createGuaranteedBoard(): (Cell | null)[][] {
   const { rows, cols } = state
   const totalCells = rows * cols
   const pairs = totalCells / 2
   state.totalPairs = pairs
 
-  // 创建空棋盘
   const board: (Cell | null)[][] = Array.from({ length: rows }, () => Array(cols).fill(null))
-
-  // 收集所有位置
   const positions: Point[] = []
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      positions.push({ row: r, col: c })
-    }
-  }
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) positions.push({ row: r, col: c })
 
-  // 打乱位置
   const shuffledPositions = shuffleArray(positions)
-  
-  // 选择图案
   const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
 
-  // 每次取两个位置放置相同的图案
   let id = 0
   for (let i = 0; i < pairs; i++) {
     const emoji = selectedEmojis[i]
     const p1 = shuffledPositions[i * 2]
     const p2 = shuffledPositions[i * 2 + 1]
-    
     board[p1.row][p1.col] = { id: id++, emoji, row: p1.row, col: p1.col, isMatched: false }
     board[p2.row][p2.col] = { id: id++, emoji, row: p2.row, col: p2.col, isMatched: false }
   }
 
-  console.log('✅ 棋盘生成完成（逆向生成法 - 保证可解）')
+  console.log('✅ 棋盘生成完成')
   return board
 }
 
-// ==================== 路径检测算法 ====================
-
+// 路径检测
 function canConnectStraight(board: (Cell | null)[][], p1: Point, p2: Point): boolean {
   if (p1.row === p2.row) {
     const [minC, maxC] = [Math.min(p1.col, p2.col), Math.max(p1.col, p2.col)]
@@ -151,6 +136,7 @@ function findPath(board: (Cell | null)[][], p1: Point, p2: Point): Point[] | nul
   return null
 }
 
+// ===== 修复：findHint 中正确提取 Point =====
 function findHint(board: (Cell | null)[][]): [Cell, Cell] | null {
   const cells: Cell[] = []
   for (let r = 0; r < state.rows; r++) {
@@ -160,8 +146,13 @@ function findHint(board: (Cell | null)[][]): [Cell, Cell] | null {
   }
   for (let i = 0; i < cells.length; i++) {
     for (let j = i + 1; j < cells.length; j++) {
-      if (cells[i].emoji === cells[j].emoji && findPath(board, cells[i], cells[j])) {
-        return [cells[i], cells[j]]
+      if (cells[i].emoji === cells[j].emoji) {
+        // 修复：提取 Point 对象传给 findPath
+        const p1: Point = { row: cells[i].row, col: cells[i].col }
+        const p2: Point = { row: cells[j].row, col: cells[j].col }
+        if (findPath(board, p1, p2)) {
+          return [cells[i], cells[j]]
+        }
       }
     }
   }
@@ -172,8 +163,7 @@ function hasValidMoves(board: (Cell | null)[][]): boolean {
   return findHint(board) !== null
 }
 
-// ==================== 渲染和交互 ====================
-
+// 渲染
 function formatTime(seconds: number): string {
   return Math.floor(seconds / 60).toString().padStart(2, '0') + ':' + (seconds % 60).toString().padStart(2, '0')
 }
@@ -293,11 +283,7 @@ function shuffleBoard() {
   let i = 0
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c]) board[r][c]!.emoji = sh[i++]
   
-  // 洗牌后检查，如果还是死局就再洗
-  if (!hasValidMoves(state.board)) {
-    shuffleBoard()
-    return
-  }
+  if (!hasValidMoves(state.board)) { shuffleBoard(); return }
   
   const m = document.getElementById('noMovesModal')
   if (m) m.classList.add('hidden')
@@ -317,7 +303,7 @@ function resetGame() {
   const cfg = DIFFICULTY_CONFIG[state.difficulty]
   state.rows = cfg.rows
   state.cols = cfg.cols
-  state.board = createGuaranteedBoard()  // 使用逆向生成法
+  state.board = createGuaranteedBoard()
   state.selectedCell = null
   state.moves = 0
   state.matches = 0
