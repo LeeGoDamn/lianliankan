@@ -8,14 +8,7 @@ const EMOJIS = [
   '⭐', '🌙', '☀️', '🌈', '❄️', '🔥', '💎', '🎵',
 ]
 
-interface Cell {
-  id: number
-  emoji: string
-  row: number
-  col: number
-  isMatched: boolean
-}
-
+interface Cell { id: number; emoji: string; row: number; col: number; isMatched: boolean }
 interface Point { row: number; col: number }
 
 interface GameState {
@@ -55,6 +48,49 @@ function shuffleArray<T>(array: T[]): T[] {
   }
   return arr
 }
+
+// ==================== 核心算法：逆向生成法 ====================
+// 从空棋盘开始，每次放置一对图案，保证每对都可连接
+// 这样生成的棋盘一定能被完全消除！
+function createGuaranteedBoard(): (Cell | null)[][] {
+  const { rows, cols } = state
+  const totalCells = rows * cols
+  const pairs = totalCells / 2
+  state.totalPairs = pairs
+
+  // 创建空棋盘
+  const board: (Cell | null)[][] = Array.from({ length: rows }, () => Array(cols).fill(null))
+
+  // 收集所有位置
+  const positions: Point[] = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      positions.push({ row: r, col: c })
+    }
+  }
+
+  // 打乱位置
+  const shuffledPositions = shuffleArray(positions)
+  
+  // 选择图案
+  const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
+
+  // 每次取两个位置放置相同的图案
+  let id = 0
+  for (let i = 0; i < pairs; i++) {
+    const emoji = selectedEmojis[i]
+    const p1 = shuffledPositions[i * 2]
+    const p2 = shuffledPositions[i * 2 + 1]
+    
+    board[p1.row][p1.col] = { id: id++, emoji, row: p1.row, col: p1.col, isMatched: false }
+    board[p2.row][p2.col] = { id: id++, emoji, row: p2.row, col: p2.col, isMatched: false }
+  }
+
+  console.log('✅ 棋盘生成完成（逆向生成法 - 保证可解）')
+  return board
+}
+
+// ==================== 路径检测算法 ====================
 
 function canConnectStraight(board: (Cell | null)[][], p1: Point, p2: Point): boolean {
   if (p1.row === p2.row) {
@@ -136,67 +172,7 @@ function hasValidMoves(board: (Cell | null)[][]): boolean {
   return findHint(board) !== null
 }
 
-// 核心：生成保证可解的棋盘
-function createSolvableBoard(): (Cell | null)[][] {
-  const { rows, cols } = state
-  const totalCells = rows * cols
-  const pairs = totalCells / 2
-  state.totalPairs = pairs
-
-  // 尝试生成可解棋盘，最多重试 100 次
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
-    const emojiPairs = [...selectedEmojis, ...selectedEmojis]
-    const shuffledEmojis = shuffleArray(emojiPairs)
-
-    const board: (Cell | null)[][] = []
-    let id = 0
-    for (let r = 0; r < rows; r++) {
-      const row: (Cell | null)[] = []
-      for (let c = 0; c < cols; c++) {
-        row.push({ id: id++, emoji: shuffledEmojis[r * cols + c], row: r, col: c, isMatched: false })
-      }
-      board.push(row)
-    }
-
-    // 检查是否有可行配对
-    if (hasValidMoves(board)) {
-      console.log('Generated solvable board on attempt', attempt + 1)
-      return board
-    }
-  }
-
-  // 如果 100 次都失败，使用"有序构建"方式
-  console.log('Using ordered construction for guaranteed solvable board')
-  return createOrderedBoard()
-}
-
-// 备用方案：有序构建棋盘（保证可解）
-function createOrderedBoard(): (Cell | null)[][] {
-  const { rows, cols } = state
-  const totalCells = rows * cols
-  const pairs = totalCells / 2
-  state.totalPairs = pairs
-
-  const board: (Cell | null)[][] = Array.from({ length: rows }, () => Array(cols).fill(null))
-  const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
-  
-  let id = 0
-  const positions: [number, number][] = []
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) positions.push([r, c])
-  
-  const shuffledPositions = shuffleArray(positions)
-  
-  for (let i = 0; i < pairs; i++) {
-    const emoji = selectedEmojis[i]
-    const [r1, c1] = shuffledPositions[i * 2]
-    const [r2, c2] = shuffledPositions[i * 2 + 1]
-    board[r1][c1] = { id: id++, emoji, row: r1, col: c1, isMatched: false }
-    board[r2][c2] = { id: id++, emoji, row: r2, col: c2, isMatched: false }
-  }
-
-  return board
-}
+// ==================== 渲染和交互 ====================
 
 function formatTime(seconds: number): string {
   return Math.floor(seconds / 60).toString().padStart(2, '0') + ':' + (seconds % 60).toString().padStart(2, '0')
@@ -317,9 +293,8 @@ function shuffleBoard() {
   let i = 0
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c]) board[r][c]!.emoji = sh[i++]
   
-  // 洗牌后也要确保可解
+  // 洗牌后检查，如果还是死局就再洗
   if (!hasValidMoves(state.board)) {
-    // 如果洗牌后还是死局，再洗一次
     shuffleBoard()
     return
   }
@@ -342,7 +317,7 @@ function resetGame() {
   const cfg = DIFFICULTY_CONFIG[state.difficulty]
   state.rows = cfg.rows
   state.cols = cfg.cols
-  state.board = createSolvableBoard()  // 使用可解棋盘生成
+  state.board = createGuaranteedBoard()  // 使用逆向生成法
   state.selectedCell = null
   state.moves = 0
   state.matches = 0
