@@ -1,6 +1,5 @@
 import './style.css'
 
-// Emoji 列表
 const EMOJIS = [
   '🍎', '🍊', '🍋', '🍇', '🍓', '🍑', '🥝', '🍒',
   '🌸', '🌺', '🌻', '🌹', '🌼', '💐', '🌿', '🍀',
@@ -17,10 +16,7 @@ interface Cell {
   isMatched: boolean
 }
 
-interface Point {
-  row: number
-  col: number
-}
+interface Point { row: number; col: number }
 
 interface GameState {
   board: (Cell | null)[][]
@@ -39,19 +35,10 @@ interface GameState {
 }
 
 const state: GameState = {
-  board: [],
-  rows: 8,
-  cols: 10,
-  selectedCell: null,
-  moves: 0,
-  matches: 0,
-  totalPairs: 0,
-  startTime: null,
-  elapsedTime: 0,
-  timerInterval: null,
-  difficulty: 'medium',
-  isWon: false,
-  isAnimating: false,
+  board: [], rows: 8, cols: 10, selectedCell: null,
+  moves: 0, matches: 0, totalPairs: 0,
+  startTime: null, elapsedTime: 0, timerInterval: null,
+  difficulty: 'medium', isWon: false, isAnimating: false,
 }
 
 const DIFFICULTY_CONFIG = {
@@ -61,161 +48,83 @@ const DIFFICULTY_CONFIG = {
 }
 
 function shuffleArray<T>(array: T[]): T[] {
-  const newArray = [...array]
-  for (let i = newArray.length - 1; i > 0; i--) {
+  const arr = [...array]
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[newArray[i], newArray[j]] = [newArray[j], newArray[i]]
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
   }
-  return newArray
+  return arr
 }
 
-function createBoard(): (Cell | null)[][] {
-  const { rows, cols } = state
-  const totalCells = rows * cols
-  const pairs = totalCells / 2
-  state.totalPairs = pairs
-
-  const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
-  const emojiPairs = [...selectedEmojis, ...selectedEmojis]
-  const shuffledEmojis = shuffleArray(emojiPairs)
-
-  const board: (Cell | null)[][] = []
-  let id = 0
-
-  for (let r = 0; r < rows; r++) {
-    const row: (Cell | null)[] = []
-    for (let c = 0; c < cols; c++) {
-      row.push({
-        id: id++,
-        emoji: shuffledEmojis[r * cols + c],
-        row: r,
-        col: c,
-        isMatched: false,
-      })
-    }
-    board.push(row)
-  }
-
-  return board
-}
-
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0')
-}
-
-// 检查两点之间是否可以直线连接
 function canConnectStraight(board: (Cell | null)[][], p1: Point, p2: Point): boolean {
   if (p1.row === p2.row) {
-    const minCol = Math.min(p1.col, p2.col)
-    const maxCol = Math.max(p1.col, p2.col)
-    for (let c = minCol + 1; c < maxCol; c++) {
-      if (c >= 0 && c < state.cols && board[p1.row] && board[p1.row][c] !== null) {
-        return false
-      }
+    const [minC, maxC] = [Math.min(p1.col, p2.col), Math.max(p1.col, p2.col)]
+    for (let c = minC + 1; c < maxC; c++) {
+      if (c >= 0 && c < state.cols && board[p1.row]?.[c] !== null) return false
     }
     return true
   }
   if (p1.col === p2.col) {
-    const minRow = Math.min(p1.row, p2.row)
-    const maxRow = Math.max(p1.row, p2.row)
-    for (let r = minRow + 1; r < maxRow; r++) {
-      if (r >= 0 && r < state.rows && board[r] && board[r][p1.col] !== null) {
-        return false
-      }
+    const [minR, maxR] = [Math.min(p1.row, p2.row), Math.max(p1.row, p2.row)]
+    for (let r = minR + 1; r < maxR; r++) {
+      if (r >= 0 && r < state.rows && board[r]?.[p1.col] !== null) return false
     }
     return true
   }
   return false
 }
 
-// 检查一个拐点连接
 function canConnectOneCorner(board: (Cell | null)[][], p1: Point, p2: Point): Point | null {
-  const corner1: Point = { row: p1.row, col: p2.col }
-  const corner2: Point = { row: p2.row, col: p1.col }
-
-  const isValidC1 = corner1.col < 0 || corner1.col >= state.cols || corner1.row < 0 || corner1.row >= state.rows || (board[corner1.row] && board[corner1.row][corner1.col] === null)
-  const isSameC1 = (corner1.row === p1.row && corner1.col === p1.col) || (corner1.row === p2.row && corner1.col === p2.col)
-  
-  if (isValidC1 && !isSameC1) {
-    if (canConnectStraight(board, p1, corner1) && canConnectStraight(board, corner1, p2)) {
-      return corner1
-    }
+  const corners = [{ row: p1.row, col: p2.col }, { row: p2.row, col: p1.col }]
+  for (const c of corners) {
+    const isValid = c.col < 0 || c.col >= state.cols || c.row < 0 || c.row >= state.rows || board[c.row]?.[c.col] === null
+    const isSame = (c.row === p1.row && c.col === p1.col) || (c.row === p2.row && c.col === p2.col)
+    if (isValid && !isSame && canConnectStraight(board, p1, c) && canConnectStraight(board, c, p2)) return c
   }
-
-  const isValidC2 = corner2.col < 0 || corner2.col >= state.cols || corner2.row < 0 || corner2.row >= state.rows || (board[corner2.row] && board[corner2.row][corner2.col] === null)
-  const isSameC2 = (corner2.row === p1.row && corner2.col === p1.col) || (corner2.row === p2.row && corner2.col === p2.col)
-  
-  if (isValidC2 && !isSameC2) {
-    if (canConnectStraight(board, p1, corner2) && canConnectStraight(board, corner2, p2)) {
-      return corner2
-    }
-  }
-
   return null
 }
 
-// 检查两个拐点连接
 function canConnectTwoCorners(board: (Cell | null)[][], p1: Point, p2: Point): Point[] | null {
-  const { rows, cols } = state
-
   // 水平扫描
-  for (let c = -1; c <= cols; c++) {
+  for (let c = -1; c <= state.cols; c++) {
     if (c === p1.col || c === p2.col) continue
-    const corner1: Point = { row: p1.row, col: c }
-    const corner2: Point = { row: p2.row, col: c }
-    const valid1 = c < 0 || c >= cols || (board[corner1.row] && board[corner1.row][c] === null)
-    const valid2 = c < 0 || c >= cols || (board[corner2.row] && board[corner2.row][c] === null)
-    if (valid1 && valid2) {
-      if (canConnectStraight(board, p1, corner1) && canConnectStraight(board, corner1, corner2) && canConnectStraight(board, corner2, p2)) {
-        return [corner1, corner2]
-      }
-    }
+    const c1: Point = { row: p1.row, col: c }
+    const c2: Point = { row: p2.row, col: c }
+    const v1 = c < 0 || c >= state.cols || board[c1.row]?.[c] === null
+    const v2 = c < 0 || c >= state.cols || board[c2.row]?.[c] === null
+    if (v1 && v2 && canConnectStraight(board, p1, c1) && canConnectStraight(board, c1, c2) && canConnectStraight(board, c2, p2)) return [c1, c2]
   }
-
   // 垂直扫描
-  for (let r = -1; r <= rows; r++) {
+  for (let r = -1; r <= state.rows; r++) {
     if (r === p1.row || r === p2.row) continue
-    const corner1: Point = { row: r, col: p1.col }
-    const corner2: Point = { row: r, col: p2.col }
-    const valid1 = r < 0 || r >= rows || (board[r] && board[r][corner1.col] === null)
-    const valid2 = r < 0 || r >= rows || (board[r] && board[r][corner2.col] === null)
-    if (valid1 && valid2) {
-      if (canConnectStraight(board, p1, corner1) && canConnectStraight(board, corner1, corner2) && canConnectStraight(board, corner2, p2)) {
-        return [corner1, corner2]
-      }
-    }
+    const c1: Point = { row: r, col: p1.col }
+    const c2: Point = { row: r, col: p2.col }
+    const v1 = r < 0 || r >= state.rows || board[r]?.[c1.col] === null
+    const v2 = r < 0 || r >= state.rows || board[r]?.[c2.col] === null
+    if (v1 && v2 && canConnectStraight(board, p1, c1) && canConnectStraight(board, c1, c2) && canConnectStraight(board, c2, p2)) return [c1, c2]
   }
-
   return null
 }
 
-interface PathResult {
-  canConnect: boolean
-  path: Point[]
-}
-
-function findPath(board: (Cell | null)[][], p1: Point, p2: Point): PathResult {
-  if (canConnectStraight(board, p1, p2)) return { canConnect: true, path: [p1, p2] }
+function findPath(board: (Cell | null)[][], p1: Point, p2: Point): Point[] | null {
+  if (canConnectStraight(board, p1, p2)) return [p1, p2]
   const c1 = canConnectOneCorner(board, p1, p2)
-  if (c1) return { canConnect: true, path: [p1, c1, p2] }
+  if (c1) return [p1, c1, p2]
   const c2 = canConnectTwoCorners(board, p1, p2)
-  if (c2) return { canConnect: true, path: [p1, c2[0], c2[1], p2] }
-  return { canConnect: false, path: [] }
+  if (c2) return [p1, c2[0], c2[1], p2]
+  return null
 }
 
-function findHint(): [Cell, Cell] | null {
-  const { board, rows, cols } = state
+function findHint(board: (Cell | null)[][]): [Cell, Cell] | null {
   const cells: Cell[] = []
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (board[r][c] && !board[r][c]!.isMatched) cells.push(board[r][c]!)
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      if (board[r]?.[c] && !board[r][c]!.isMatched) cells.push(board[r][c]!)
     }
   }
   for (let i = 0; i < cells.length; i++) {
     for (let j = i + 1; j < cells.length; j++) {
-      if (cells[i].emoji === cells[j].emoji && findPath(board, cells[i], cells[j]).canConnect) {
+      if (cells[i].emoji === cells[j].emoji && findPath(board, cells[i], cells[j])) {
         return [cells[i], cells[j]]
       }
     }
@@ -223,8 +132,74 @@ function findHint(): [Cell, Cell] | null {
   return null
 }
 
-function hasValidMoves(): boolean {
-  return findHint() !== null
+function hasValidMoves(board: (Cell | null)[][]): boolean {
+  return findHint(board) !== null
+}
+
+// 核心：生成保证可解的棋盘
+function createSolvableBoard(): (Cell | null)[][] {
+  const { rows, cols } = state
+  const totalCells = rows * cols
+  const pairs = totalCells / 2
+  state.totalPairs = pairs
+
+  // 尝试生成可解棋盘，最多重试 100 次
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
+    const emojiPairs = [...selectedEmojis, ...selectedEmojis]
+    const shuffledEmojis = shuffleArray(emojiPairs)
+
+    const board: (Cell | null)[][] = []
+    let id = 0
+    for (let r = 0; r < rows; r++) {
+      const row: (Cell | null)[] = []
+      for (let c = 0; c < cols; c++) {
+        row.push({ id: id++, emoji: shuffledEmojis[r * cols + c], row: r, col: c, isMatched: false })
+      }
+      board.push(row)
+    }
+
+    // 检查是否有可行配对
+    if (hasValidMoves(board)) {
+      console.log('Generated solvable board on attempt', attempt + 1)
+      return board
+    }
+  }
+
+  // 如果 100 次都失败，使用"有序构建"方式
+  console.log('Using ordered construction for guaranteed solvable board')
+  return createOrderedBoard()
+}
+
+// 备用方案：有序构建棋盘（保证可解）
+function createOrderedBoard(): (Cell | null)[][] {
+  const { rows, cols } = state
+  const totalCells = rows * cols
+  const pairs = totalCells / 2
+  state.totalPairs = pairs
+
+  const board: (Cell | null)[][] = Array.from({ length: rows }, () => Array(cols).fill(null))
+  const selectedEmojis = shuffleArray(EMOJIS).slice(0, pairs)
+  
+  let id = 0
+  const positions: [number, number][] = []
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) positions.push([r, c])
+  
+  const shuffledPositions = shuffleArray(positions)
+  
+  for (let i = 0; i < pairs; i++) {
+    const emoji = selectedEmojis[i]
+    const [r1, c1] = shuffledPositions[i * 2]
+    const [r2, c2] = shuffledPositions[i * 2 + 1]
+    board[r1][c1] = { id: id++, emoji, row: r1, col: c1, isMatched: false }
+    board[r2][c2] = { id: id++, emoji, row: r2, col: c2, isMatched: false }
+  }
+
+  return board
+}
+
+function formatTime(seconds: number): string {
+  return Math.floor(seconds / 60).toString().padStart(2, '0') + ':' + (seconds % 60).toString().padStart(2, '0')
 }
 
 function drawMatchLine(path: Point[]) {
@@ -233,20 +208,16 @@ function drawMatchLine(path: Point[]) {
   const cells = container.querySelectorAll('.cell:not(.opacity-0)')
   if (cells.length === 0) return
   const firstCell = cells[0] as HTMLElement
-  const cellWidth = firstCell.offsetWidth
-  const cellHeight = firstCell.offsetHeight
-  const gap = 8
+  const cellW = firstCell.offsetWidth, cellH = firstCell.offsetHeight, gap = 8
 
   for (let i = 0; i < path.length - 1; i++) {
-    const p1 = path[i]
-    const p2 = path[i + 1]
+    const p1 = path[i], p2 = path[i + 1]
     const line = document.createElement('div')
     line.className = 'match-line'
-    const x1 = p1.col < 0 ? -20 : p1.col >= state.cols ? state.cols * (cellWidth + gap) + 20 : p1.col * (cellWidth + gap) + cellWidth / 2
-    const y1 = p1.row < 0 ? -20 : p1.row >= state.rows ? state.rows * (cellHeight + gap) + 20 : p1.row * (cellHeight + gap) + cellHeight / 2
-    const x2 = p2.col < 0 ? -20 : p2.col >= state.cols ? state.cols * (cellWidth + gap) + 20 : p2.col * (cellWidth + gap) + cellWidth / 2
-    const y2 = p2.row < 0 ? -20 : p2.row >= state.rows ? state.rows * (cellHeight + gap) + 20 : p2.row * (cellHeight + gap) + cellHeight / 2
-
+    const x1 = p1.col < 0 ? -20 : p1.col >= state.cols ? state.cols * (cellW + gap) + 20 : p1.col * (cellW + gap) + cellW / 2
+    const y1 = p1.row < 0 ? -20 : p1.row >= state.rows ? state.rows * (cellH + gap) + 20 : p1.row * (cellH + gap) + cellH / 2
+    const x2 = p2.col < 0 ? -20 : p2.col >= state.cols ? state.cols * (cellW + gap) + 20 : p2.col * (cellW + gap) + cellW / 2
+    const y2 = p2.row < 0 ? -20 : p2.row >= state.rows ? state.rows * (cellH + gap) + 20 : p2.row * (cellH + gap) + cellH / 2
     if (p1.row === p2.row) {
       line.style.width = Math.abs(x2 - x1) + 'px'
       line.style.height = '4px'
@@ -269,8 +240,7 @@ function renderGame() {
 
   const diffBtns = (['easy', 'medium', 'hard'] as const).map(d => {
     const sel = state.difficulty === d ? 'ring-2 ring-white ring-offset-2 ring-offset-transparent' : 'opacity-70'
-    const lbl = d === 'easy' ? '简单' : d === 'medium' ? '中等' : '困难'
-    return '<button class="btn ' + sel + '" data-difficulty="' + d + '">' + lbl + '</button>'
+    return '<button class="btn ' + sel + '" data-difficulty="' + d + '">' + (d === 'easy' ? '简单' : d === 'medium' ? '中等' : '困难') + '</button>'
   }).join('')
 
   const boardHtml = board.map(row => row.map(cell => cell
@@ -305,11 +275,11 @@ function handleCellClick(el: HTMLElement) {
   if (state.selectedCell.id === cell.id) { state.selectedCell = null; renderGame(); return }
   if (state.selectedCell.emoji !== cell.emoji) { state.selectedCell = cell; renderGame(); return }
 
-  const res = findPath(state.board, { row: state.selectedCell.row, col: state.selectedCell.col }, { row: cell.row, col: cell.col })
-  if (res.canConnect) {
+  const path = findPath(state.board, { row: state.selectedCell.row, col: state.selectedCell.col }, { row: cell.row, col: cell.col })
+  if (path) {
     state.moves++
     state.isAnimating = true
-    drawMatchLine(res.path)
+    drawMatchLine(path)
     setTimeout(() => {
       state.selectedCell!.isMatched = true
       cell.isMatched = true
@@ -319,14 +289,14 @@ function handleCellClick(el: HTMLElement) {
       state.selectedCell = null
       state.isAnimating = false
       if (state.matches === state.totalPairs) { state.isWon = true; if (state.timerInterval) clearInterval(state.timerInterval) }
-      else if (!hasValidMoves()) setTimeout(() => { const m = document.getElementById('noMovesModal'); if (m) m.classList.remove('hidden') }, 300)
+      else if (!hasValidMoves(state.board)) setTimeout(() => { const m = document.getElementById('noMovesModal'); if (m) m.classList.remove('hidden') }, 300)
       renderGame()
     }, 300)
   } else { state.selectedCell = cell; renderGame() }
 }
 
 function showHint() {
-  const hint = findHint()
+  const hint = findHint(state.board)
   if (hint) {
     const [c1, c2] = hint
     document.querySelectorAll('.cell').forEach(c => {
@@ -346,6 +316,14 @@ function shuffleBoard() {
   const sh = shuffleArray(rem)
   let i = 0
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c]) board[r][c]!.emoji = sh[i++]
+  
+  // 洗牌后也要确保可解
+  if (!hasValidMoves(state.board)) {
+    // 如果洗牌后还是死局，再洗一次
+    shuffleBoard()
+    return
+  }
+  
   const m = document.getElementById('noMovesModal')
   if (m) m.classList.add('hidden')
   renderGame()
@@ -364,7 +342,7 @@ function resetGame() {
   const cfg = DIFFICULTY_CONFIG[state.difficulty]
   state.rows = cfg.rows
   state.cols = cfg.cols
-  state.board = createBoard()
+  state.board = createSolvableBoard()  // 使用可解棋盘生成
   state.selectedCell = null
   state.moves = 0
   state.matches = 0
