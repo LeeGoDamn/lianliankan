@@ -49,7 +49,12 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr
 }
 
-// 逆向生成法：保证初始有解
+// 辅助函数：安全检查某个位置是否有障碍
+function hasObstacle(board: (Cell | null)[][], row: number, col: number): boolean {
+  if (row < 0 || row >= state.rows || col < 0 || col >= state.cols) return false
+  return board[row]?.[col] !== null && board[row]?.[col] !== undefined
+}
+
 function createGuaranteedBoard(): (Cell | null)[][] {
   const { rows, cols } = state
   const totalCells = rows * cols
@@ -76,19 +81,19 @@ function createGuaranteedBoard(): (Cell | null)[][] {
   return board
 }
 
-// 路径检测
+// 路径检测 - 使用 hasObstacle 辅助函数
 function canConnectStraight(board: (Cell | null)[][], p1: Point, p2: Point): boolean {
   if (p1.row === p2.row) {
     const [minC, maxC] = [Math.min(p1.col, p2.col), Math.max(p1.col, p2.col)]
     for (let c = minC + 1; c < maxC; c++) {
-      if (c >= 0 && c < state.cols && board[p1.row]?.[c] !== null) return false
+      if (hasObstacle(board, p1.row, c)) return false
     }
     return true
   }
   if (p1.col === p2.col) {
     const [minR, maxR] = [Math.min(p1.row, p2.row), Math.max(p1.row, p2.row)]
     for (let r = minR + 1; r < maxR; r++) {
-      if (r >= 0 && r < state.rows && board[r]?.[p1.col] !== null) return false
+      if (hasObstacle(board, r, p1.col)) return false
     }
     return true
   }
@@ -98,31 +103,34 @@ function canConnectStraight(board: (Cell | null)[][], p1: Point, p2: Point): boo
 function canConnectOneCorner(board: (Cell | null)[][], p1: Point, p2: Point): Point | null {
   const corners = [{ row: p1.row, col: p2.col }, { row: p2.row, col: p1.col }]
   for (const c of corners) {
-    const isValid = c.col < 0 || c.col >= state.cols || c.row < 0 || c.row >= state.rows || board[c.row]?.[c.col] === null
-    const isSame = (c.row === p1.row && c.col === p1.col) || (c.row === p2.row && c.col === p2.col)
-    if (isValid && !isSame && canConnectStraight(board, p1, c) && canConnectStraight(board, c, p2)) return c
+    // 拐点必须在边界外或为空
+    const cornerIsFree = !hasObstacle(board, c.row, c.col)
+    const isSameAsP = (c.row === p1.row && c.col === p1.col) || (c.row === p2.row && c.col === p2.col)
+    if (cornerIsFree && !isSameAsP && canConnectStraight(board, p1, c) && canConnectStraight(board, c, p2)) return c
   }
   return null
 }
 
 function canConnectTwoCorners(board: (Cell | null)[][], p1: Point, p2: Point): Point[] | null {
-  // 水平扫描
+  // 水平扫描（包括边界外）
   for (let c = -1; c <= state.cols; c++) {
     if (c === p1.col || c === p2.col) continue
     const c1: Point = { row: p1.row, col: c }
     const c2: Point = { row: p2.row, col: c }
-    const v1 = c < 0 || c >= state.cols || board[c1.row]?.[c] === null
-    const v2 = c < 0 || c >= state.cols || board[c2.row]?.[c] === null
-    if (v1 && v2 && canConnectStraight(board, p1, c1) && canConnectStraight(board, c1, c2) && canConnectStraight(board, c2, p2)) return [c1, c2]
+    if (!hasObstacle(board, c1.row, c1.col) && !hasObstacle(board, c2.row, c2.col) &&
+        canConnectStraight(board, p1, c1) && canConnectStraight(board, c1, c2) && canConnectStraight(board, c2, p2)) {
+      return [c1, c2]
+    }
   }
-  // 垂直扫描
+  // 垂直扫描（包括边界外）
   for (let r = -1; r <= state.rows; r++) {
     if (r === p1.row || r === p2.row) continue
     const c1: Point = { row: r, col: p1.col }
     const c2: Point = { row: r, col: p2.col }
-    const v1 = r < 0 || r >= state.rows || board[r]?.[c1.col] === null
-    const v2 = r < 0 || r >= state.rows || board[r]?.[c2.col] === null
-    if (v1 && v2 && canConnectStraight(board, p1, c1) && canConnectStraight(board, c1, c2) && canConnectStraight(board, c2, p2)) return [c1, c2]
+    if (!hasObstacle(board, c1.row, c1.col) && !hasObstacle(board, c2.row, c2.col) &&
+        canConnectStraight(board, p1, c1) && canConnectStraight(board, c1, c2) && canConnectStraight(board, c2, p2)) {
+      return [c1, c2]
+    }
   }
   return null
 }
@@ -136,7 +144,6 @@ function findPath(board: (Cell | null)[][], p1: Point, p2: Point): Point[] | nul
   return null
 }
 
-// ===== 修复：findHint 中正确提取 Point =====
 function findHint(board: (Cell | null)[][]): [Cell, Cell] | null {
   const cells: Cell[] = []
   for (let r = 0; r < state.rows; r++) {
@@ -147,12 +154,9 @@ function findHint(board: (Cell | null)[][]): [Cell, Cell] | null {
   for (let i = 0; i < cells.length; i++) {
     for (let j = i + 1; j < cells.length; j++) {
       if (cells[i].emoji === cells[j].emoji) {
-        // 修复：提取 Point 对象传给 findPath
         const p1: Point = { row: cells[i].row, col: cells[i].col }
         const p2: Point = { row: cells[j].row, col: cells[j].col }
-        if (findPath(board, p1, p2)) {
-          return [cells[i], cells[j]]
-        }
+        if (findPath(board, p1, p2)) return [cells[i], cells[j]]
       }
     }
   }
